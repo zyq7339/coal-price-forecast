@@ -70,24 +70,25 @@ AI预测上限：XXX
 
 
 def parse_prediction(text):
-    """从 AI 返回的文本中提取结构化数据"""
+    """从 AI 返回的文本中提取结构化数据（增强容错版）"""
     result = {}
 
     # 清洗文本：移除 Markdown 加粗符号
     text = text.replace('**', '').replace('*', '').replace('__', '')
 
+    # 方法1：尝试标准格式匹配
     patterns = {
-        "date": r"预测覆盖日期：(\d{4}-\d{2}-\d{2})",
-        "lower": r"AI预测下限：(\d+)",
-        "upper": r"AI预测上限：(\d+)",
-        "confidence": r"置信度：(高|中|低)",
-        "market_stage": r"市场阶段判断：(.+)",
-        "inventory_status": r"库存状态：(.+)",
-        "freight_change": r"运费周变化：([+-]?\d+)%",
-        "direction": r"涨跌方向及幅度：(.+)",
-        "suggestion": r"操作建议：(.+)",
-        "up_risk": r"上行风险：(.+)",
-        "down_risk": r"下行风险：(.+)"
+        "date": r"预测覆盖日期[：:]\s*(\d{4}-\d{2}-\d{2})",
+        "lower": r"AI预测下限[：:]\s*(\d+)",
+        "upper": r"AI预测上限[：:]\s*(\d+)",
+        "confidence": r"置信度[：:]\s*(高|中|低)",
+        "market_stage": r"市场阶段判断[：:]\s*(.+)",
+        "inventory_status": r"库存状态[：:]\s*(.+)",
+        "freight_change": r"运费周变化[：:]\s*([+-]?\d+)%",
+        "direction": r"涨跌方向及幅度[：:]\s*(.+)",
+        "suggestion": r"操作建议[：:]\s*(.+)",
+        "up_risk": r"上行风险[：:]\s*(.+)",
+        "down_risk": r"下行风险[：:]\s*(.+)"
     }
 
     for key, pattern in patterns.items():
@@ -95,11 +96,29 @@ def parse_prediction(text):
         if match:
             result[key] = match.group(1).strip()
         else:
-            if key == "freight_change":
-                result[key] = "0"
-            elif key == "date":
-                result[key] = datetime.now().strftime("%Y-%m-%d")
-            else:
-                result[key] = ""
+            result[key] = ""
+
+    # 方法2：如果标准格式没匹配到预测区间，尝试从文本中智能提取
+    if not result.get("lower") or not result.get("upper"):
+        # 尝试匹配 "预测区间：800-810" 或 "800-810元/吨" 格式
+        range_patterns = [
+            r"预测区间[：:]\s*(\d+)\s*[-~]\s*(\d+)",
+            r"(\d+)\s*[-~]\s*(\d+)\s*元",
+            r"(\d+)\s*-\s*(\d+)\s*元"
+        ]
+        for pattern in range_patterns:
+            match = re.search(pattern, text)
+            if match:
+                result["lower"] = match.group(1)
+                result["upper"] = match.group(2)
+                break
+
+    # 方法3：如果没有置信度，默认设为"中"
+    if not result.get("confidence"):
+        result["confidence"] = "中"
+
+    # 方法4：如果没有运费变化，默认为0
+    if not result.get("freight_change"):
+        result["freight_change"] = "0"
 
     return result
