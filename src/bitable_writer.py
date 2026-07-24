@@ -8,6 +8,26 @@ def get_tenant_access_token(app_id, app_secret):
     return resp.json()["tenant_access_token"]
 
 
+def safe_int(value, default=0):
+    """安全转换为 int"""
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_float(value, default=0.0):
+    """安全转换为 float"""
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def write_prediction(app_token, table_id, token, prediction):
     """写入预测记录到多维表格"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
@@ -15,16 +35,18 @@ def write_prediction(app_token, table_id, token, prediction):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
+
     fields = {
         "预测覆盖日期": prediction.get("date", ""),
-        "AI预测下限": int(prediction.get("lower", 0)),
-        "AI预测上限": int(prediction.get("upper", 0)),
+        "AI预测下限": safe_int(prediction.get("lower")),
+        "AI预测上限": safe_int(prediction.get("upper")),
         "置信度": prediction.get("confidence", ""),
         "市场阶段": prediction.get("market_stage", ""),
         "库存状态": prediction.get("inventory_status", ""),
-        "运费周变化(%)": float(prediction.get("freight_change", 0) or 0),
+        "运费周变化(%)": safe_float(prediction.get("freight_change")),
         "偏差归因": prediction.get("attribution", "")
     }
+
     payload = {"fields": fields}
     resp = requests.post(url, headers=headers, json=payload)
     return resp.json()
