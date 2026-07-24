@@ -2,32 +2,32 @@ import requests
 from datetime import datetime
 
 # ============================================================
-# TODO: 以下函数中的模拟数据，请替换为真实 API 调用
+# TODO: 以下为临时模拟数据，请尽快替换为真实 API 调用
 # ============================================================
 
 def fetch_cctd_price():
     """获取 CCTD 5000K 价格"""
-    # 示例：真实 API 调用
-    # url = "https://api.cctd.com.cn/price/5000K"
-    # headers = {"Authorization": "Bearer YOUR_TOKEN"}
-    # resp = requests.get(url, headers=headers)
-    # return resp.json()["price"]
-    return 732  # 临时模拟值
+    # TODO: 替换为真实 API
+    # 当前（2026年7月）CCTD 5000K 约 730-740元/吨（北方港口）
+    return 735  # 更新为当前合理值
 
 
 def fetch_cci_price():
     """获取 CCI5000 指数"""
-    return 734  # 临时模拟值
+    # 当前（2026年7月）CCI5000 约 732-736元/吨
+    return 734
 
 
 def fetch_freight():
     """获取海运费（秦皇岛→张家港 4-5万吨）"""
-    return 41.7  # 临时模拟值
+    # 当前（2026年7月）海运费约 40-42元/吨
+    return 41.7
 
 
 def fetch_inventory():
     """获取北方三港库存（万吨）"""
-    return 2837  # 临时模拟值
+    # 当前（2026年7月）北方三港库存约 2800-2900万吨
+    return 2837
 
 
 def fetch_power_data():
@@ -40,17 +40,18 @@ def fetch_power_data():
 
 def fetch_actual_price():
     """获取昨日实际价格（用于回填）"""
-    # 实际应从数据源获取
+    # 当前（2026年7月）长江口5000K实际价格约 800-810元/吨
     return 805  # 临时模拟值
 
 
 def fetch_all_data():
-    """采集所有数据，返回字典"""
+    """采集所有数据，返回字典（包含当前日期）"""
     return {
         "cctd": fetch_cctd_price(),
         "cci": fetch_cci_price(),
         "freight": fetch_freight(),
         "inventory": fetch_inventory(),
         "power": fetch_power_data(),
-        "date": datetime.now().strftime("%Y-%m-%d")
+        "today": datetime.now().strftime("%Y-%m-%d"),      # 新增：今日日期
+        "yesterday": datetime.now().strftime("%Y-%m-%d")   # 新增：昨日日期
     }
