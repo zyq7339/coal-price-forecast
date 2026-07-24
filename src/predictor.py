@@ -1,4 +1,16 @@
-prompt = f"""请根据以下今日数据，生成明日（{data['today']}的明天）长江口5000K动力煤价格预测报告。
+import requests
+import re
+from datetime import datetime
+
+def call_deepseek(data, api_key):
+    """调用 DeepSeek API 生成预测报告"""
+    url = "https://api.deepseek.com/v1/chat/completions"
+    
+    # 判断库存是否触发极值
+    inventory = data.get('inventory', 0)
+    inventory_status = "极值看空" if inventory > 2600 else "高位" if inventory > 2500 else "正常"
+    
+    prompt = f"""请根据以下今日数据，生成明日（{data['today']}的明天）长江口5000K动力煤价格预测报告。
 
 【今日日期】
 {data['today']}
@@ -19,7 +31,7 @@ prompt = f"""请根据以下今日数据，生成明日（{data['today']}的明�
 - 海运费单周涨跌>15%时，涨跌放大系数1.5倍
 
 【当前市场判断参考】
-- 目前北方三港库存{data['inventory']}万吨，已{'触发极值看空（>2600万吨）' if data['inventory'] > 2600 else '处于高位区间'}
+- 目前北方三港库存{data['inventory']}万吨，处于{inventory_status}状态
 - 请根据库存数据判断市场阶段，库存>2600时必须判定为"极值看空阶段"
 
 【输出格式要求】
@@ -44,12 +56,20 @@ AI预测上限：XXX（长江口5000K价格）
 是否考虑运费传导：是/否
 """
 
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3
+    }
+    
+    resp = requests.post(url, headers=headers, json=payload)
+    return resp.json()["choices"][0]["message"]["content"]
 
-### 修复3：`src/predictor.py` — 修改解析逻辑，增加运费变化字段的默认值
 
-在 `parse_prediction` 函数中，确保 `freight_change` 有默认值：
-
-```python
 def parse_prediction(text):
     """从 AI 返回的文本中提取结构化数据"""
     result = {}
@@ -75,9 +95,9 @@ def parse_prediction(text):
         else:
             # 为关键字段设置默认值
             if key == "freight_change":
-                result[key] = "0"  # 默认为0
+                result[key] = "0"
             elif key == "date":
-                result[key] = datetime.now().strftime("%Y-%m-%d")  # 默认今天
+                result[key] = datetime.now().strftime("%Y-%m-%d")
             else:
                 result[key] = ""
     
