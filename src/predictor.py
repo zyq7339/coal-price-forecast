@@ -7,7 +7,6 @@ def call_deepseek(data, api_key):
     """调用 DeepSeek API 生成预测报告"""
     url = "https://api.deepseek.com/v1/chat/completions"
 
-    # 库存状态判断
     inventory = data.get('inventory', 0)
     if inventory > 2600:
         market_note = "极值看空阶段（库存>2600万吨，供应端利多失效）"
@@ -73,6 +72,10 @@ AI预测上限：XXX
 def parse_prediction(text):
     """从 AI 返回的文本中提取结构化数据"""
     result = {}
+
+    # 清洗文本：移除 Markdown 加粗符号
+    text = text.replace('**', '').replace('*', '').replace('__', '')
+
     patterns = {
         "date": r"预测覆盖日期：(\d{4}-\d{2}-\d{2})",
         "lower": r"AI预测下限：(\d+)",
