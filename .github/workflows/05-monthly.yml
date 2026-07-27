@@ -2,7 +2,7 @@ name: 05-每月预测
 
 on:
   schedule:
-    - cron: '0 8 1 * *'
+    - cron: '0 8 1 * *'   # 每月1日16:00 (UTC+8)
   workflow_dispatch:
 
 jobs:
