@@ -2,7 +2,7 @@ name: 01-每日预测
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'   # 每天16:00（UTC+8）
+    - cron: '0 8 * * 1-5'   # 每天16:00 (UTC+8)
   workflow_dispatch:
 
 jobs:
