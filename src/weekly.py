@@ -22,9 +22,7 @@ def get_week_range():
 
 
 def calculate_weekly_actual(app_token, table_id, token, start_date, end_date):
-    """
-    从每日预测表查询上周实际数据，计算均价/最高/最低
-    """
+    """从每日预测表查询上周实际数据，计算均价/最高/最低"""
     records = query_daily_records_by_date_range(
         app_token, table_id, token,
         start_date.strftime("%Y-%m-%d"),
@@ -54,8 +52,8 @@ def main():
     webhook = os.environ.get("FEISHU_WEBHOOK")
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     app_token = os.environ.get("BITABLE_APP_TOKEN")
-    daily_table_id = os.environ.get("BITABLE_TABLE_ID")  # 每日预测表的table_id
-    weekly_table_id = os.environ.get("WEEKLY_TABLE_ID")  # 每周预测表的table_id
+    daily_table_id = os.environ.get("BITABLE_TABLE_ID")
+    weekly_table_id = os.environ.get("WEEKLY_TABLE_ID")
     app_id = os.environ.get("FEISHU_APP_ID")
     app_secret = os.environ.get("FEISHU_APP_SECRET")
 
@@ -75,7 +73,6 @@ def main():
     )
 
     if avg_price is not None:
-        # 查找本周对应的记录
         record_id = find_weekly_record_by_week(app_token, weekly_table_id, token, week_range)
         if record_id:
             update_weekly_actual(app_token, weekly_table_id, token, record_id, avg_price, high_price, low_price)
