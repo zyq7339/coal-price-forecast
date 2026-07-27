@@ -1,7 +1,7 @@
 import requests
 
 def send_prediction_card(webhook, prediction):
-    """发送预测卡片到飞书群"""
+    """发送每日预测卡片到飞书群"""
     card = {
         "msg_type": "interactive",
         "card": {
@@ -114,4 +114,14 @@ def send_alert_card(webhook, record):
         }
     }
     resp = requests.post(webhook, json=card)
+    return resp.status_code == 200
+
+
+def send_text(webhook, content):
+    """发送纯文本消息到飞书群（用于周报/月报）"""
+    payload = {
+        "msg_type": "text",
+        "content": {"text": content}
+    }
+    resp = requests.post(webhook, json=payload)
     return resp.status_code == 200
