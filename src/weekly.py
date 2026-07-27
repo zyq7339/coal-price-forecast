@@ -1,8 +1,15 @@
 import os
+import re
 from datetime import datetime, timedelta
 from data_fetcher import fetch_all_data
 from predictor import call_deepseek_custom
 from feishu_notifier import send_text
+from bitable_writer import (
+    get_tenant_access_token,
+    query_daily_records_by_date_range,
+    find_weekly_record_by_week,
+    update_weekly_actual
+)
 
 
 def get_week_range():
@@ -14,40 +21,78 @@ def get_week_range():
     return last_monday, last_sunday
 
 
-def fetch_weekly_actual_data():
-    """从多维表格获取上周的实际数据（待实现）"""
-    # TODO: 调用多维表格API查询上周记录
-    return {
-        "avg": 795,
-        "high": 800,
-        "low": 788,
-        "change": -5
-    }
+def calculate_weekly_actual(app_token, table_id, token, start_date, end_date):
+    """
+    从每日预测表查询上周实际数据，计算均价/最高/最低
+    """
+    records = query_daily_records_by_date_range(
+        app_token, table_id, token,
+        start_date.strftime("%Y-%m-%d"),
+        end_date.strftime("%Y-%m-%d")
+    )
+    
+    prices = []
+    for record in records:
+        fields = record.get("fields", {})
+        price = fields.get("实际价格")
+        if price and isinstance(price, (int, float)):
+            prices.append(price)
+    
+    if not prices:
+        print("⚠️ 上周无实际价格数据，无法回填")
+        return None, None, None
+    
+    avg_price = round(sum(prices) / len(prices), 1)
+    high_price = max(prices)
+    low_price = min(prices)
+    
+    print(f"📊 上周实际数据: 均价={avg_price}, 最高={high_price}, 最低={low_price}, 样本数={len(prices)}")
+    return avg_price, high_price, low_price
 
 
 def main():
     webhook = os.environ.get("FEISHU_WEBHOOK")
     api_key = os.environ.get("DEEPSEEK_API_KEY")
+    app_token = os.environ.get("BITABLE_APP_TOKEN")
+    daily_table_id = os.environ.get("BITABLE_TABLE_ID")  # 每日预测表的table_id
+    weekly_table_id = os.environ.get("WEEKLY_TABLE_ID")  # 每周预测表的table_id
+    app_id = os.environ.get("FEISHU_APP_ID")
+    app_secret = os.environ.get("FEISHU_APP_SECRET")
 
-    if not all([webhook, api_key]):
+    if not all([webhook, api_key, app_token, daily_table_id, weekly_table_id, app_id, app_secret]):
         print("❌ 缺少环境变量")
         return
 
-    # 1. 上周回顾数据
+    # 1. 获取上周日期范围
     start, end = get_week_range()
-    weekly_data = fetch_weekly_actual_data()
+    week_range = f"{start.strftime('%Y-%m-%d')} ~ {end.strftime('%Y-%m-%d')}"
+    print(f"📅 上周: {week_range}")
 
-    # 2. 今日数据（用于本周预测）
+    # 2. 获取上周实际数据（从每日预测表查询并回填）
+    token = get_tenant_access_token(app_id, app_secret)
+    avg_price, high_price, low_price = calculate_weekly_actual(
+        app_token, daily_table_id, token, start, end
+    )
+
+    if avg_price is not None:
+        # 查找本周对应的记录
+        record_id = find_weekly_record_by_week(app_token, weekly_table_id, token, week_range)
+        if record_id:
+            update_weekly_actual(app_token, weekly_table_id, token, record_id, avg_price, high_price, low_price)
+            print(f"✅ 已回填上周实际数据: 均价{avg_price}元/吨")
+        else:
+            print(f"⚠️ 未找到周次为 '{week_range}' 的记录，请先生成周报")
+
+    # 3. 今日数据（用于本周预测）
     today_data = fetch_all_data()
 
-    # 3. 构造 Prompt
+    # 4. 构造Prompt并生成周报
     prompt = f"""请生成煤炭周度行情报告。
 
-【上周回顾】{start.strftime('%Y-%m-%d')} ~ {end.strftime('%Y-%m-%d')}
-- 上周均价：{weekly_data['avg']}元/吨
-- 上周最高：{weekly_data['high']}元/吨
-- 上周最低：{weekly_data['low']}元/吨
-- 上周涨跌：{weekly_data['change']}元/吨
+【上周回顾】{week_range}
+- 上周均价：{avg_price if avg_price else '待回填'}元/吨
+- 上周最高：{high_price if high_price else '待回填'}元/吨
+- 上周最低：{low_price if low_price else '待回填'}元/吨
 
 【当前数据】
 - 长江口5000K：{today_data['yangtze']}元/吨
@@ -73,12 +118,8 @@ def main():
 风险提示：XXX
 """
 
-    # 4. 调用AI
     report = call_deepseek_custom(prompt, api_key)
-
-    # 5. 推送纯文本消息（周报）
-    send_text(webhook, f"📈 煤炭周报\n{report}")
-
+    send_text(webhook, f"📈 煤炭周报\n\n{report}")
     print("✅ 周报完成")
 
 
