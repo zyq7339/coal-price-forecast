@@ -23,11 +23,20 @@ def get_week_range():
 
 def calculate_weekly_actual(app_token, table_id, token, start_date, end_date):
     """从每日预测表查询上周实际数据，计算均价/最高/最低"""
+    print(f"🔍 查询范围: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+    
     records = query_daily_records_by_date_range(
         app_token, table_id, token,
         start_date.strftime("%Y-%m-%d"),
         end_date.strftime("%Y-%m-%d")
     )
+    
+    print(f"📊 返回记录数: {len(records)}")
+    
+    # 打印前3条记录预览
+    for i, record in enumerate(records[:3]):
+        fields = record.get("fields", {})
+        print(f"   - 记录{i+1}: 日期={fields.get('预测覆盖日期')}, 实际价格={fields.get('实际价格')}")
     
     prices = []
     for record in records:
@@ -44,7 +53,7 @@ def calculate_weekly_actual(app_token, table_id, token, start_date, end_date):
     high_price = max(prices)
     low_price = min(prices)
     
-    print(f"📊 上周实际数据: 均价={avg_price}, 最高={high_price}, 最低={low_price}, 样本数={len(prices)}")
+    print(f"📊 计算完成: 均价={avg_price}, 最高={high_price}, 最低={low_price}, 样本数={len(prices)}")
     return avg_price, high_price, low_price
 
 
@@ -57,8 +66,27 @@ def main():
     app_id = os.environ.get("FEISHU_APP_ID")
     app_secret = os.environ.get("FEISHU_APP_SECRET")
 
-    if not all([webhook, api_key, app_token, daily_table_id, weekly_table_id, app_id, app_secret]):
-        print("❌ 缺少环境变量")
+    print("🔍 检查环境变量...")
+    env_vars = {
+        "FEISHU_WEBHOOK": webhook,
+        "DEEPSEEK_API_KEY": api_key,
+        "BITABLE_APP_TOKEN": app_token,
+        "BITABLE_TABLE_ID": daily_table_id,
+        "WEEKLY_TABLE_ID": weekly_table_id,
+        "FEISHU_APP_ID": app_id,
+        "FEISHU_APP_SECRET": app_secret
+    }
+    
+    missing = []
+    for key, value in env_vars.items():
+        if value:
+            print(f"   ✅ {key}: 已配置")
+        else:
+            print(f"   ❌ {key}: 缺失")
+            missing.append(key)
+    
+    if missing:
+        print(f"❌ 缺少环境变量: {', '.join(missing)}")
         return
 
     # 1. 获取上周日期范围
