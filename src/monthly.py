@@ -16,7 +16,6 @@ from bitable_writer import (
 def get_month_range():
     """获取上月（月初至月末）的日期范围"""
     today = datetime.now()
-    # 上个月
     if today.month == 1:
         year = today.year - 1
         month = 12
@@ -30,9 +29,7 @@ def get_month_range():
 
 
 def calculate_monthly_actual(app_token, table_id, token, start_date, end_date):
-    """
-    从每日预测表查询上月实际数据，计算均价/最高/最低
-    """
+    """从每日预测表查询上月实际数据，计算均价/最高/最低"""
     records = query_daily_records_by_date_range(
         app_token, table_id, token,
         start_date.strftime("%Y-%m-%d"),
@@ -62,8 +59,8 @@ def main():
     webhook = os.environ.get("FEISHU_WEBHOOK")
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     app_token = os.environ.get("BITABLE_APP_TOKEN")
-    daily_table_id = os.environ.get("BITABLE_TABLE_ID")  # 每日预测表的table_id
-    monthly_table_id = os.environ.get("MONTHLY_TABLE_ID")  # 每月预测表的table_id
+    daily_table_id = os.environ.get("BITABLE_TABLE_ID")
+    monthly_table_id = os.environ.get("MONTHLY_TABLE_ID")
     app_id = os.environ.get("FEISHU_APP_ID")
     app_secret = os.environ.get("FEISHU_APP_SECRET")
 
@@ -83,7 +80,6 @@ def main():
     )
 
     if avg_price is not None:
-        # 查找本月对应的记录
         record_id = find_monthly_record_by_month(app_token, monthly_table_id, token, month_label)
         if record_id:
             update_monthly_actual(app_token, monthly_table_id, token, record_id, avg_price, high_price, low_price)
