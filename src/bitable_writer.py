@@ -37,13 +37,17 @@ def safe_float(value, default=0.0):
 # ============================================================
 
 def write_prediction(app_token, table_id, token, prediction):
-    """写入预测记录到多维表格"""
+    """
+    写入预测记录到多维表格
+    返回: API响应JSON
+    """
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
+    # 构造字段数据（字段名必须与表格列名完全一致）
     fields = {
         "预测覆盖日期": prediction.get("date", ""),
         "AI预测下限": safe_int(prediction.get("lower")),
@@ -56,8 +60,27 @@ def write_prediction(app_token, table_id, token, prediction):
     }
 
     payload = {"fields": fields}
+
+    print("📤 正在写入多维表格...")
+    print(f"   app_token: {app_token}")
+    print(f"   table_id: {table_id}")
+    print(f"   数据: {payload}")
+
     resp = requests.post(url, headers=headers, json=payload)
-    return resp.json()
+    result = resp.json()
+
+    print(f"📥 HTTP状态码: {resp.status_code}")
+    print(f"📥 API响应: {result}")
+
+    if result.get("code") == 0:
+        print("✅ 写入成功！")
+    else:
+        print(f"❌ 写入失败: {result.get('msg')}")
+        # 如果返回错误详情，一并打印
+        if "error" in result:
+            print(f"   错误详情: {result.get('error')}")
+
+    return result
 
 
 def update_actual_price(app_token, table_id, token, record_id, actual_price):
@@ -104,7 +127,6 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
         "Content-Type": "application/json"
     }
     
-    # 使用 and + >= <= 组合筛选
     payload = {
         "filter": {
             "conjunction": "and",
@@ -153,17 +175,12 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
 
 
 def find_weekly_record_by_week(app_token, table_id, token, week_range):
-    """
-    根据周次查找每周预测表中的记录
-    week_range: "2026-07-20 ~ 2026-07-26" 格式
-    返回: record_id 或 None
-    """
+    """根据周次查找每周预测表中的记录"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    
     payload = {
         "filter": {
             "conjunction": "and",
@@ -176,10 +193,8 @@ def find_weekly_record_by_week(app_token, table_id, token, week_range):
             ]
         }
     }
-    
     resp = requests.post(url, headers=headers, json=payload)
     data = resp.json()
-    
     if data.get("code") == 0:
         items = data.get("data", {}).get("items", [])
         if items:
@@ -188,17 +203,12 @@ def find_weekly_record_by_week(app_token, table_id, token, week_range):
 
 
 def find_monthly_record_by_month(app_token, table_id, token, month):
-    """
-    根据月份查找每月预测表中的记录
-    month: "2026年7月" 格式
-    返回: record_id 或 None
-    """
+    """根据月份查找每月预测表中的记录"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    
     payload = {
         "filter": {
             "conjunction": "and",
@@ -211,10 +221,8 @@ def find_monthly_record_by_month(app_token, table_id, token, month):
             ]
         }
     }
-    
     resp = requests.post(url, headers=headers, json=payload)
     data = resp.json()
-    
     if data.get("code") == 0:
         items = data.get("data", {}).get("items", [])
         if items:
