@@ -104,15 +104,20 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
         "Content-Type": "application/json"
     }
     
-    # 构造筛选条件：日期在范围内 且 实际价格不为空
+    # 使用 and + >= <= 组合筛选
     payload = {
         "filter": {
             "conjunction": "and",
             "conditions": [
                 {
                     "field_name": "预测覆盖日期",
-                    "operator": "between",
-                    "value": [start_date, end_date]
+                    "operator": "greater_equal",
+                    "value": [start_date]
+                },
+                {
+                    "field_name": "预测覆盖日期",
+                    "operator": "less_equal",
+                    "value": [end_date]
                 },
                 {
                     "field_name": "实际价格",
@@ -143,6 +148,7 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
         if not page_token:
             break
     
+    print(f"📊 查询到 {len(all_records)} 条含实际价格的记录")
     return all_records
 
 
