@@ -24,3 +24,5 @@ jobs:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
         run: python src/main.py
+
+# 强制刷新 schedule 缓存 - 2026-07-28
