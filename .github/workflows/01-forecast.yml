@@ -2,7 +2,7 @@ name: 01-每日预测
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'   # 每天16:00 (UTC+8)
+    - cron: '30 15 * * 1-5'   # 每天23:30 (UTC+8)
   workflow_dispatch:
 
 jobs:
@@ -25,4 +25,4 @@ jobs:
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
         run: python src/main.py
 
-# 强制刷新 schedule 缓存 - 2026-07-28
+# 强制刷新 schedule 缓存 - 2026-07-29
