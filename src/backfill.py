@@ -1,5 +1,4 @@
 import os
-import requests
 from datetime import datetime, timedelta
 from bitable_writer import (
     get_tenant_access_token,
@@ -21,11 +20,6 @@ def main():
 
     if not all([webhook, app_token, table_id, app_id, app_secret]):
         print("❌ 缺少环境变量")
-        print(f"   FEISHU_WEBHOOK: {'已设置' if webhook else '缺失'}")
-        print(f"   BITABLE_APP_TOKEN: {'已设置' if app_token else '缺失'}")
-        print(f"   BITABLE_TABLE_ID: {'已设置' if table_id else '缺失'}")
-        print(f"   FEISHU_APP_ID: {'已设置' if app_id else '缺失'}")
-        print(f"   FEISHU_APP_SECRET: {'已设置' if app_secret else '缺失'}")
         return
 
     token = get_tenant_access_token(app_id, app_secret)
@@ -77,7 +71,7 @@ def main():
         except Exception as e:
             print(f"⚠️ 计算运费周变化时出错: {e}")
 
-    # 3. 推送验证结果卡片
+    # 3. 推送验证结果
     send_backfill_card(webhook, record)
     print("✅ 回填完成")
 
