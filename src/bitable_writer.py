@@ -55,6 +55,7 @@ def write_prediction(app_token, table_id, token, prediction):
         "市场阶段": prediction.get("market_stage", ""),
         "库存状态": prediction.get("inventory_status", ""),
         "运费周变化(%)": safe_float(prediction.get("freight_change")),
+        "海运费": safe_float(prediction.get("freight")),   # 新增：存储当日海运费
         "偏差归因": prediction.get("attribution", "")
     }
 
@@ -95,7 +96,7 @@ def get_latest_record(app_token, table_id, token):
     """获取最新一条预测记录（用于回填）"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
     headers = {"Authorization": f"Bearer {token}"}
-    params = {"page_size": 20}  # 获取最近20条
+    params = {"page_size": 20}
 
     resp = requests.get(url, headers=headers, params=params)
     data = resp.json()
@@ -121,6 +122,36 @@ def get_latest_record(app_token, table_id, token):
     return {"record_id": latest["record_id"], "fields": latest["fields"]}
 
 
+def find_record_by_date(app_token, table_id, token, date_str):
+    """根据预测覆盖日期查找记录"""
+    url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    payload = {
+        "filter": {
+            "conjunction": "and",
+            "conditions": [
+                {"field_name": "预测覆盖日期", "operator": "is", "value": [date_str]}
+            ]
+        }
+    }
+    resp = requests.post(url, headers=headers, json=payload)
+    data = resp.json()
+    if data.get("code") == 0:
+        items = data.get("data", {}).get("items", [])
+        if items:
+            return items[0]
+    return None
+
+
+def update_freight_change(app_token, table_id, token, record_id, change_pct):
+    """更新运费周变化"""
+    url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    payload = {"fields": {"运费周变化(%)": change_pct}}
+    resp = requests.put(url, headers=headers, json=payload)
+    return resp.json()
+
+
 # ============================================================
 # 周报/月报自动回填辅助函数
 # ============================================================
@@ -132,29 +163,15 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
     返回: 包含实际价格的记录列表
     """
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     payload = {
         "filter": {
             "conjunction": "and",
             "conditions": [
-                {
-                    "field_name": "预测覆盖日期",
-                    "operator": "greater_equal",
-                    "value": [start_date]
-                },
-                {
-                    "field_name": "预测覆盖日期",
-                    "operator": "less_equal",
-                    "value": [end_date]
-                },
-                {
-                    "field_name": "实际价格",
-                    "operator": "is_not_empty"
-                }
+                {"field_name": "预测覆盖日期", "operator": "greater_equal", "value": [start_date]},
+                {"field_name": "预测覆盖日期", "operator": "less_equal", "value": [end_date]},
+                {"field_name": "实际价格", "operator": "is_not_empty"}
             ]
         }
     }
@@ -165,17 +182,13 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
     while True:
         if page_token:
             payload["page_token"] = page_token
-
         resp = requests.post(url, headers=headers, json=payload)
         data = resp.json()
-
         if data.get("code") != 0:
             print(f"⚠️ 查询失败: {data}")
             break
-
         items = data.get("data", {}).get("items", [])
         all_records.extend(items)
-
         page_token = data.get("data", {}).get("page_token")
         if not page_token:
             break
@@ -187,19 +200,12 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
 def find_weekly_record_by_week(app_token, table_id, token, week_range):
     """根据周次查找每周预测表中的记录"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "filter": {
             "conjunction": "and",
             "conditions": [
-                {
-                    "field_name": "报告周次",
-                    "operator": "is",
-                    "value": [week_range]
-                }
+                {"field_name": "报告周次", "operator": "is", "value": [week_range]}
             ]
         }
     }
@@ -215,19 +221,12 @@ def find_weekly_record_by_week(app_token, table_id, token, week_range):
 def find_monthly_record_by_month(app_token, table_id, token, month):
     """根据月份查找每月预测表中的记录"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/search"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "filter": {
             "conjunction": "and",
             "conditions": [
-                {
-                    "field_name": "报告月份",
-                    "operator": "is",
-                    "value": [month]
-                }
+                {"field_name": "报告月份", "operator": "is", "value": [month]}
             ]
         }
     }
@@ -243,10 +242,7 @@ def find_monthly_record_by_month(app_token, table_id, token, month):
 def update_weekly_actual(app_token, table_id, token, record_id, avg_price, high_price, low_price):
     """更新每周预测表的实际数据"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "fields": {
             "本周实际均价": avg_price,
@@ -261,10 +257,7 @@ def update_weekly_actual(app_token, table_id, token, record_id, avg_price, high_
 def update_monthly_actual(app_token, table_id, token, record_id, avg_price, high_price, low_price):
     """更新每月预测表的实际数据"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{record_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "fields": {
             "本月实际均价": avg_price,
