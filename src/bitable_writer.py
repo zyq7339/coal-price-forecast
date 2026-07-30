@@ -47,7 +47,6 @@ def write_prediction(app_token, table_id, token, prediction):
         "Content-Type": "application/json"
     }
 
-    # 构造字段数据（字段名必须与表格列名完全一致）
     fields = {
         "预测覆盖日期": prediction.get("date", ""),
         "AI预测下限": safe_int(prediction.get("lower")),
@@ -76,9 +75,6 @@ def write_prediction(app_token, table_id, token, prediction):
         print("✅ 写入成功！")
     else:
         print(f"❌ 写入失败: {result.get('msg')}")
-        # 如果返回错误详情，一并打印
-        if "error" in result:
-            print(f"   错误详情: {result.get('error')}")
 
     return result
 
@@ -99,16 +95,30 @@ def get_latest_record(app_token, table_id, token):
     """获取最新一条预测记录（用于回填）"""
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
     headers = {"Authorization": f"Bearer {token}"}
-    params = {
-        "page_size": 1,
-        "sort": [{"field_name": "预测覆盖日期", "desc": True}]
-    }
+    params = {"page_size": 20}  # 获取最近20条
+
     resp = requests.get(url, headers=headers, params=params)
     data = resp.json()
-    if data.get("data", {}).get("items"):
-        item = data["data"]["items"][0]
-        return {"record_id": item["record_id"], "fields": item["fields"]}
-    return None
+
+    if data.get("code") != 0:
+        print(f"⚠️ 查询记录失败: {data}")
+        return None
+
+    items = data.get("data", {}).get("items", [])
+    if not items:
+        print("⚠️ 表格中没有记录")
+        return None
+
+    # 按预测覆盖日期降序排序
+    items_sorted = sorted(
+        items,
+        key=lambda x: x.get("fields", {}).get("预测覆盖日期", ""),
+        reverse=True
+    )
+
+    latest = items_sorted[0]
+    print(f"📋 最新记录日期: {latest['fields'].get('预测覆盖日期')}")
+    return {"record_id": latest["record_id"], "fields": latest["fields"]}
 
 
 # ============================================================
@@ -126,7 +136,7 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    
+
     payload = {
         "filter": {
             "conjunction": "and",
@@ -148,28 +158,28 @@ def query_daily_records_by_date_range(app_token, table_id, token, start_date, en
             ]
         }
     }
-    
+
     all_records = []
     page_token = None
-    
+
     while True:
         if page_token:
             payload["page_token"] = page_token
-        
+
         resp = requests.post(url, headers=headers, json=payload)
         data = resp.json()
-        
+
         if data.get("code") != 0:
             print(f"⚠️ 查询失败: {data}")
             break
-        
+
         items = data.get("data", {}).get("items", [])
         all_records.extend(items)
-        
+
         page_token = data.get("data", {}).get("page_token")
         if not page_token:
             break
-    
+
     print(f"📊 查询到 {len(all_records)} 条含实际价格的记录")
     return all_records
 
