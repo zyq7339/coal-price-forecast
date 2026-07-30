@@ -14,13 +14,7 @@ def main():
     app_secret = os.environ.get("FEISHU_APP_SECRET")
 
     if not all([webhook, api_key, app_token, table_id, app_id, app_secret]):
-        print("❌ 缺少环境变量，请检查 GitHub Secrets 配置")
-        print(f"   FEISHU_WEBHOOK: {'已设置' if webhook else '缺失'}")
-        print(f"   DEEPSEEK_API_KEY: {'已设置' if api_key else '缺失'}")
-        print(f"   BITABLE_APP_TOKEN: {'已设置' if app_token else '缺失'}")
-        print(f"   BITABLE_TABLE_ID: {'已设置' if table_id else '缺失'}")
-        print(f"   FEISHU_APP_ID: {'已设置' if app_id else '缺失'}")
-        print(f"   FEISHU_APP_SECRET: {'已设置' if app_secret else '缺失'}")
+        print("❌ 缺少环境变量")
         return
 
     print("📡 正在采集数据...")
@@ -39,8 +33,8 @@ def main():
     report = call_deepseek(data, api_key)
     prediction = parse_prediction(report)
 
-    # 补充运费数据（用于写入表格和计算周变化）
-    prediction["freight"] = data["freight"]   # 新增
+    # 补充海运费数据（用于写入表格和计算周变化）
+    prediction["freight"] = data["freight"]
 
     print(f"   解析结果: 预测区间 {prediction.get('lower', '?')} - {prediction.get('upper', '?')} 元/吨")
     print(f"   市场阶段: {prediction.get('market_stage', '')}")
