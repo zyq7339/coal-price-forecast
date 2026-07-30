@@ -1,6 +1,13 @@
 import os
 import requests
-from bitable_writer import get_tenant_access_token, get_latest_record, update_actual_price
+from datetime import datetime, timedelta
+from bitable_writer import (
+    get_tenant_access_token,
+    get_latest_record,
+    update_actual_price,
+    find_record_by_date,
+    update_freight_change
+)
 from feishu_notifier import send_backfill_card
 from data_fetcher import fetch_actual_price
 
@@ -29,31 +36,48 @@ def main():
     print("📡 获取最新预测记录...")
     record = get_latest_record(app_token, table_id, token)
     if not record:
-        # 尝试直接查询记录数量，便于排查
-        url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
-        headers = {"Authorization": f"Bearer {token}"}
-        resp = requests.get(url, headers=headers)
-        data = resp.json()
-        items = data.get("data", {}).get("items", [])
-        print(f"📊 表格中共有 {len(items)} 条记录")
-        if items:
-            print("📋 第一条记录字段:", list(items[0].get("fields", {}).keys()))
+        print("❌ 无记录可回填")
         return
 
     fields = record.get("fields", {})
-    print(f"📋 最新记录日期: {fields.get('预测覆盖日期')}")
+    record_id = record["record_id"]
+    current_date = fields.get("预测覆盖日期")
+    print(f"📋 最新记录日期: {current_date}")
 
-    # 获取实际价格
+    # 1. 回填实际价格
     actual = fetch_actual_price()
-    if not actual:
-        print("❌ 无法获取实际价格")
-        return
+    if actual:
+        print(f"📝 回填实际价格: {actual} 元/吨")
+        update_actual_price(app_token, table_id, token, record_id, actual)
+        print("✅ 实际价格回填完成")
+    else:
+        print("⚠️ 无法获取实际价格")
 
-    print(f"📝 回填实际价格: {actual} 元/吨")
-    result = update_actual_price(app_token, table_id, token, record["record_id"], actual)
-    print(f"📥 回填结果: {result}")
+    # 2. 计算并更新运费周变化
+    if current_date:
+        try:
+            date_obj = datetime.strptime(current_date, "%Y-%m-%d")
+            last_week_date = (date_obj - timedelta(days=7)).strftime("%Y-%m-%d")
+            print(f"🔍 查找上周同期记录: {last_week_date}")
 
-    # 推送验证结果
+            last_record = find_record_by_date(app_token, table_id, token, last_week_date)
+            if last_record:
+                last_freight = last_record.get("fields", {}).get("海运费")
+                current_freight = fields.get("海运费")
+                if last_freight and current_freight and last_freight != 0:
+                    change_pct = (current_freight - last_freight) / last_freight * 100
+                    change_pct = round(change_pct, 2)
+                    print(f"📊 运费周变化: {change_pct}%")
+                    update_freight_change(app_token, table_id, token, record_id, change_pct)
+                    print("✅ 运费周变化更新完成")
+                else:
+                    print("⚠️ 缺少运费数据，无法计算周变化")
+            else:
+                print(f"⚠️ 未找到 {last_week_date} 的记录，无法计算运费周变化")
+        except Exception as e:
+            print(f"⚠️ 计算运费周变化时出错: {e}")
+
+    # 3. 推送验证结果卡片
     send_backfill_card(webhook, record)
     print("✅ 回填完成")
 
