@@ -10,35 +10,32 @@ def main():
 
     if not all([webhook, api_key]):
         print("❌ 缺少环境变量")
-        print(f"   FEISHU_WEBHOOK: {'已设置' if webhook else '缺失'}")
-        print(f"   DEEPSEEK_API_KEY: {'已设置' if api_key else '缺失'}")
         return
 
-    print("📡 正在采集数据...")
+    print("📡 正在采集今日收盘数据...")
     data = fetch_all_data()
 
-    print(f"   CCTD: {data['cctd']} 元/吨")
-    print(f"   CCI: {data['cci']} 元/吨")
+    print(f"   CCI5000收盘: {data['cci']} 元/吨")
     print(f"   海运费: {data['freight']} 元/吨")
     print(f"   运费周变化: {data['freight_change']}%")
     print(f"   北方库存: {data['inventory']} 万吨")
     print(f"   电厂库存: {data['power']['inventory']} 万吨")
     print(f"   电厂日耗: {data['power']['consumption']} 万吨")
-    print(f"   长江口参考价: {data['yangtze']} 元/吨")
+    print(f"   长江口收盘参考价: {data['yangtze']} 元/吨")
     print(f"   今日日期: {data['today']}")
+    print(f"   预测日期: {data['tomorrow']}")
 
-    print("🧠 正在调用 AI 生成预测...")
+    print("🧠 正在调用 AI 生成明日预测...")
     report = call_deepseek(data, api_key)
     prediction = parse_prediction(report)
 
-    # 补充海运费数据
+    # 补充运费数据用于卡片显示
     prediction["freight"] = data["freight"]
     prediction["freight_change"] = data["freight_change"]
 
     print(f"   解析结果: 预测区间 {prediction.get('lower', '?')} - {prediction.get('upper', '?')} 元/吨")
-    print(f"   市场阶段: {prediction.get('market_stage', '')}")
-    print(f"   海运费: {prediction.get('freight')} 元/吨")
-    print(f"   运费周变化: {prediction.get('freight_change', 'N/A')}%")
+    print(f"   涨跌方向: {prediction.get('direction', '?')}")
+    print(f"   判断依据: {prediction.get('basis', '')}")
 
     print("📤 正在推送飞书卡片...")
     send_prediction_card(webhook, prediction)
