@@ -127,37 +127,32 @@ def fetch_from_sxcoal(pattern, default=None, url=None):
 
 
 def fetch_cctd_price():
-    """从CCTD获取5000K价格（北方港口）"""
+    """从CCTD获取最新5000K价格"""
     try:
-        # 尝试动态发现最新文章
-        url = get_latest_cctd_article_url()
-        
-        # 如果发现失败，尝试备用URL
-        if url is None:
-            for backup_url in BACKUP_URLS["cctd"]:
-                try:
-                    resp = requests.get(backup_url, headers=headers, timeout=10)
-                    soup = BeautifulSoup(resp.text, 'html.parser')
-                    text = soup.get_text()
-                    # 匹配 "5000K：736" 或 "5000K、4500K规格品分别收于826、736、643元/吨"
-                    match = re.search(r'5000K[、，]\s*(\d+)', text)
-                    if match:
-                        return int(match.group(1))
-                except:
-                    continue
-            return 736  # 默认值
-        
-        # 访问最新文章
-        resp = requests.get(url, headers=headers, timeout=10)
+        # 方案1：通过列表页获取最新文章URL
+        list_url = "https://www.coalchina.org.cn/index.php?m=content&c=index&a=lists&catid=33"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(list_url, headers=headers, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text()
-        match = re.search(r'5000K[、，]\s*(\d+)', text)
-        if match:
-            return int(match.group(1))
-        return 736
+        
+        # 找最新文章链接
+        links = soup.find_all('a', href=True)
+        for link in links:
+            href = link.get('href', '')
+            if 'catid=33' in href and 'id=' in href:
+                article_url = href if href.startswith('http') else f"https://www.coalchina.org.cn{href}"
+                # 访问文章页面提取价格
+                article_resp = requests.get(article_url, headers=headers, timeout=10)
+                article_soup = BeautifulSoup(article_resp.text, 'html.parser')
+                text = article_soup.get_text()
+                # 匹配 "5000K、4500K规格品分别收于959、871、790元/吨"
+                match = re.search(r'5000K[、，]\s*(\d+)', text)
+                if match:
+                    return int(match.group(1))
+        return None
     except Exception as e:
         print(f"⚠️ CCTD采集失败: {e}")
-        return 736
+        return None
 
 
 def fetch_cci_price():
