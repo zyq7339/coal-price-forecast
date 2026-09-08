@@ -4,55 +4,64 @@ from datetime import datetime
 
 
 def call_deepseek(data, api_key):
-    """调用 DeepSeek API 生成每日预测报告（原有函数，保持不变）"""
+    """调用 DeepSeek API 生成明日预测（基于今日收盘）"""
     url = "https://api.deepseek.com/v1/chat/completions"
 
-    inventory = data.get('inventory', 0)
-    if inventory > 2600:
-        market_note = "极值看空阶段（库存>2600万吨，供应端利多失效）"
-    elif inventory > 2500:
-        market_note = "高位震荡阶段（库存>2500万吨，价格承压）"
-    else:
-        market_note = "正常波动阶段"
+    prompt = f"""请根据今日（{data['today']}）收盘数据，预测明日（{data['tomorrow']}）长江口5000K动力煤价格。
 
-    prompt = f"""请根据以下今日数据，预测明日长江口5000K动力煤价格。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【今日收盘数据】（已发生，用于判断当前市场状态）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【今日日期】{data['today']}
+今日长江口5000K收盘参考价：{data['yangtze']} 元/吨
+今日北方港口5000K收盘价：{data['cctd']} 元/吨
+今日海运费（秦皇岛→张家港）：{data['freight']} 元/吨
+今日运费周变化：{data['freight_change']}%（正=上涨，负=下跌）
+今日北方三港库存：{data['inventory']} 万吨
+今日六大电厂库存：{data['power']['inventory']} 万吨
+今日六大电厂日耗：{data['power']['consumption']} 万吨
 
-【核心参考数据】
-- 今日长江口5000K实际价格：{data['yangtze']}元/吨（以此为基准预测明日）
-- 北方港口CCTD 5000K：{data['cctd']}元/吨
-- 北方港口CCI5000：{data['cci']}元/吨
-- 海运费：{data['freight']}元/吨
-- 北方三港库存：{data['inventory']}万吨
-- 六大电厂库存：{data['power']['inventory']}万吨
-- 六大电厂日耗：{data['power']['consumption']}万吨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【预测任务】基于今日收盘，判断明日走势
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【市场判断】
-{market_note}
+请从以下维度综合判断：
 
-【业务规则】
-- 正常单日波动：±1-2元/吨；异常波动阈值：>±5元/吨
-- 库存>2600万吨时，价格应偏弱运行
-- 预测区间应以今日长江口价格 {data['yangtze']} 元/吨为中心
-- 北方→长江口价差约50-60元/吨
+1. 库存水平：当前库存 {data['inventory']} 万吨
+   - >2600 → 极值看空
+   - 2500-2600 → 高位压制
+   - 2300-2500 → 中性
+   - <2300 → 偏低支撑
 
+2. 电厂日耗：当前日耗 {data['power']['consumption']} 万吨
+   - >90 → 需求偏强
+   - 80-90 → 中性
+   - <80 → 需求偏弱
+
+3. 运费趋势：周变化 {data['freight_change']}%
+   - >+5% → 成本支撑增强
+   - <-5% → 成本支撑减弱
+
+4. 价格动量：今日收盘价 {data['yangtze']} 元/吨，判断处于近期什么位置
+
+综合判断明日（{data['tomorrow']}）价格方向及幅度。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【输出格式】
-预测覆盖日期：YYYY-MM-DD
-AI预测下限：XXX
-AI预测上限：XXX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+预测覆盖日期：{data['tomorrow']}
+AI预测下限：XXX（整数）
+AI预测上限：XXX（整数）
 置信度：高/中/低
-市场阶段判断：XXX
+市场阶段判断：极值看空/高位震荡/正常波动/需求偏强
 库存状态：XXX
-运费周变化：+X% 或 -X%
+运费周变化：±X%
 涨跌方向及幅度：上涨/下跌/持平，预计幅度 ±X元/吨
+判断依据：简要说明（50字以内）
 操作建议：XXX
 上行风险：XXX
 下行风险：XXX
-
-【历史教训自查】
-是否受季节性思维影响：是/否
-是否考虑库存极值：是/否
 """
 
     headers = {
@@ -70,10 +79,8 @@ AI预测上限：XXX
 
 
 def parse_prediction(text):
-    """从 AI 返回的文本中提取结构化数据（增强容错版）"""
+    """从 AI 返回的文本中提取结构化数据"""
     result = {}
-
-    # 清洗文本：移除 Markdown 加粗符号
     text = text.replace('**', '').replace('*', '').replace('__', '')
 
     patterns = {
@@ -85,6 +92,7 @@ def parse_prediction(text):
         "inventory_status": r"库存状态[：:]\s*(.+)",
         "freight_change": r"运费周变化[：:]\s*([+-]?\d+)%",
         "direction": r"涨跌方向及幅度[：:]\s*(.+)",
+        "basis": r"判断依据[：:]\s*(.+)",
         "suggestion": r"操作建议[：:]\s*(.+)",
         "up_risk": r"上行风险[：:]\s*(.+)",
         "down_risk": r"下行风险[：:]\s*(.+)"
@@ -102,30 +110,11 @@ def parse_prediction(text):
             else:
                 result[key] = ""
 
-    # 如果预测区间仍为空，尝试从文本中智能提取
-    if not result.get("lower") or not result.get("upper"):
-        range_patterns = [
-            r"预测区间[：:]\s*(\d+)\s*[-~]\s*(\d+)",
-            r"(\d+)\s*[-~]\s*(\d+)\s*元",
-            r"(\d+)\s*-\s*(\d+)\s*元"
-        ]
-        for pattern in range_patterns:
-            match = re.search(pattern, text)
-            if match:
-                result["lower"] = match.group(1)
-                result["upper"] = match.group(2)
-                break
-
-    if not result.get("confidence"):
-        result["confidence"] = "中"
-    if not result.get("freight_change"):
-        result["freight_change"] = "0"
-
     return result
 
 
 def call_deepseek_custom(prompt_text, api_key):
-    """使用自定义 Prompt 调用 DeepSeek API（用于周报/月报等）"""
+    """使用自定义 Prompt 调用 DeepSeek API（用于周报/月报）"""
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
