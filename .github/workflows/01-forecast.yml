@@ -19,10 +19,4 @@ jobs:
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          BITABLE_APP_TOKEN: ${{ secrets.BITABLE_APP_TOKEN }}
-          BITABLE_TABLE_ID: ${{ secrets.BITABLE_TABLE_ID }}
-          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
-          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
         run: python src/main.py
-
-# 强制刷新 schedule 缓存 - 2026-07-29
