@@ -22,6 +22,8 @@ def main():
     print(f"   电厂库存: {data['power']['inventory']} 万吨")
     print(f"   电厂日耗: {data['power']['consumption']} 万吨")
     print(f"   长江口收盘参考价: {data['yangtze']} 元/吨")
+    if data.get('event'):
+        print(f"   事件: {data['event']}")
     print(f"   今日日期: {data['today']}")
     print(f"   预测日期: {data['tomorrow']}")
 
