@@ -6,6 +6,10 @@ from bs4 import BeautifulSoup
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
+# ============================================================
+# 基础数据采集函数
+# ============================================================
+
 def fetch_cctd_price():
     """获取CCTD 5000K价格"""
     try:
@@ -111,10 +115,77 @@ def fetch_power_data():
         return {"inventory": 1418.2, "consumption": 87.9}
 
 
+# ============================================================
+# 新增：市场简评、事件驱动、长江口库存采集
+# ============================================================
+
+def fetch_cctd_article_content():
+    """获取CCTD最新日评文章的全文内容"""
+    try:
+        list_url = "https://www.coalchina.org.cn/index.php?m=content&c=index&a=lists&catid=33"
+        resp = requests.get(list_url, headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '')
+            if 'catid=33' in href and 'id=' in href:
+                article_url = href if href.startswith('http') else f"https://www.coalchina.org.cn{href}"
+                article_resp = requests.get(article_url, headers=HEADERS, timeout=10)
+                return article_resp.text
+        return None
+    except Exception as e:
+        print(f"⚠️ CCTD文章获取失败: {e}")
+        return None
+
+
+def fetch_market_summary():
+    """从CCTD日评中提取市场简评"""
+    html = fetch_cctd_article_content()
+    if not html:
+        return None
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text()
+    # 尝试匹配"煤炭市场简评"段落
+    patterns = [
+        r'煤炭市场简评[：:]\s*(.*?)(?=\n\n|\Z)',
+        r'市场简评[：:]\s*(.*?)(?=\n\n|\Z)',
+        r'【市场简评】\s*(.*?)(?=\n\n|\Z)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            summary = match.group(1).strip()
+            summary = re.sub(r'\s+', ' ', summary)
+            return summary
+    # 若未找到，返回全文前300字符
+    return text[:300]
+
+
+def fetch_yangtze_inventory():
+    """
+    尝试从公开数据获取长江口库存（当前版本暂无法自动采集，返回None）
+    如后续找到数据源可补充
+    """
+    # 预留接口，当前返回None
+    return None
+
+
+def extract_event_from_summary(summary):
+    """从市场简评中提取事件关键词"""
+    if not summary:
+        return None
+    keywords = ['封航', '暴雨', '事故', '安检', '停产', '检修', '罢工', '台风', '政策', '进口']
+    found = [kw for kw in keywords if kw in summary]
+    if found:
+        return f"市场简评提及: {', '.join(found)}。摘要: {summary[:120]}..."
+    return None
+
+
+# ============================================================
+# 主采集函数
+# ============================================================
+
 def fetch_all_data():
-    """
-    采集今日收盘数据，用于预测明日价格
-    """
+    """采集今日收盘数据，包含新增维度"""
     print("📡 正在采集今日收盘数据...")
 
     today = datetime.now()
@@ -125,9 +196,14 @@ def fetch_all_data():
     freight_change = fetch_freight_change() or -3.2
     inventory = fetch_inventory() or 2205
     power = fetch_power_data()
+    summary = fetch_market_summary()
+    yangtze_inv = fetch_yangtze_inventory()
 
-    # 推算今日长江口收盘参考价 = 北方港口 + 海运费
-    yangtze_close = port_price + freight
+    # 推算长江口收盘参考价
+    yangtze = port_price + freight
+
+    # 提取事件
+    event = extract_event_from_summary(summary)
 
     data = {
         "cctd": port_price,
@@ -136,7 +212,10 @@ def fetch_all_data():
         "freight_change": freight_change,
         "inventory": inventory,
         "power": power,
-        "yangtze": yangtze_close,
+        "yangtze": yangtze,
+        "yangtze_inventory": yangtze_inv,
+        "market_summary": summary,
+        "event": event,
         "today": today.strftime("%Y-%m-%d"),
         "tomorrow": tomorrow.strftime("%Y-%m-%d")
     }
@@ -148,6 +227,10 @@ def fetch_all_data():
     print(f"   电厂库存: {data['power']['inventory']} 万吨")
     print(f"   电厂日耗: {data['power']['consumption']} 万吨")
     print(f"   推算长江口收盘参考价: {data['yangtze']} 元/吨")
+    if data['yangtze_inventory']:
+        print(f"   长江口库存: {data['yangtze_inventory']} 万吨")
+    if data['event']:
+        print(f"   ⚡ 事件: {data['event']}")
     print(f"   预测日期: {data['tomorrow']}")
 
     return data
