@@ -7,7 +7,6 @@ def call_deepseek(data, api_key):
     """调用 DeepSeek API 生成明日预测（基于今日收盘 + 多维因子）"""
     url = "https://api.deepseek.com/v1/chat/completions"
 
-    # 构建基础提示词
     prompt = f"""请根据今日（{data['today']}）收盘数据，预测明日（{data['tomorrow']}）长江口5000K动力煤价格。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -96,8 +95,18 @@ AI预测上限：XXX（整数）
         "temperature": 0.3
     }
 
-    resp = requests.post(url, headers=headers, json=payload)
-    return resp.json()["choices"][0]["message"]["content"]
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp_json = resp.json()
+    except Exception as e:
+        print(f"❌ DeepSeek 请求异常: {e}")
+        return "API请求异常"
+
+    if "choices" not in resp_json:
+        print(f"❌ DeepSeek API 返回错误: {resp_json}")
+        return "API调用失败，请检查Key或余额"
+
+    return resp_json["choices"][0]["message"]["content"]
 
 
 def parse_prediction(text):
@@ -147,5 +156,16 @@ def call_deepseek_custom(prompt_text, api_key):
         "messages": [{"role": "user", "content": prompt_text}],
         "temperature": 0.3
     }
-    resp = requests.post(url, headers=headers, json=payload)
-    return resp.json()["choices"][0]["message"]["content"]
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp_json = resp.json()
+    except Exception as e:
+        print(f"❌ DeepSeek 请求异常: {e}")
+        return "API请求异常"
+
+    if "choices" not in resp_json:
+        print(f"❌ DeepSeek API 返回错误: {resp_json}")
+        return "API调用失败，请检查Key或余额"
+
+    return resp_json["choices"][0]["message"]["content"]
