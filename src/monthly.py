@@ -40,6 +40,10 @@ def main():
 """
 
     report = call_deepseek_custom(prompt, api_key)
+    if report.startswith("API"):
+        print(f"❌ AI 调用失败: {report}")
+        return
+
     send_text(webhook, f"📅 煤炭月预测\n\n{report}")
     print("✅ 月预测完成")
 
