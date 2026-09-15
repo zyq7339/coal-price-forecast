@@ -29,9 +29,12 @@ def main():
 
     print("🧠 正在调用 AI 生成明日预测...")
     report = call_deepseek(data, api_key)
+    if report.startswith("API"):
+        print(f"❌ AI 调用失败，跳过推送: {report}")
+        return
+
     prediction = parse_prediction(report)
 
-    # 补充运费数据用于卡片显示
     prediction["freight"] = data["freight"]
     prediction["freight_change"] = data["freight_change"]
 
