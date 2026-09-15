@@ -13,10 +13,8 @@ def main():
         print("❌ 缺少环境变量")
         return
 
-    # 获取当前数据
     data = fetch_all_data()
 
-    # 构造周预测Prompt
     prompt = f"""请基于以下最新数据，生成本周（{datetime.now().strftime('%Y年%m月%d日')}起）煤炭行情周预测报告。
 
 【当前数据】
@@ -39,6 +37,10 @@ def main():
 """
 
     report = call_deepseek_custom(prompt, api_key)
+    if report.startswith("API"):
+        print(f"❌ AI 调用失败: {report}")
+        return
+
     send_text(webhook, f"📈 煤炭周预测\n\n{report}")
     print("✅ 周预测完成")
 
