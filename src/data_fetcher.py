@@ -3,15 +3,32 @@ import re
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 
 # ============================================================
-# 基础数据采集函数
+# 动态发现最新文章工具
 # ============================================================
 
-def fetch_cctd_price():
-    """获取CCTD 5000K价格"""
+def get_latest_sxcoal_article_url(keyword="日度数据跟踪"):
+    """通过站内搜索获取煤炭资源网最新相关文章URL"""
+    try:
+        search_url = f"https://www.sxcoal.com/search?keyword={keyword}"
+        resp = requests.get(search_url, headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '')
+            if '/news/detail/' in href:
+                full_url = href if href.startswith('http') else f"https://www.sxcoal.com{href}"
+                return full_url
+        return None
+    except Exception as e:
+        print(f"⚠️ 搜索煤炭资源网失败: {e}")
+        return None
+
+
+def get_latest_cctd_article_url():
+    """从CCTD列表页获取最新日评文章URL"""
     try:
         list_url = "https://www.coalchina.org.cn/index.php?m=content&c=index&a=lists&catid=33"
         resp = requests.get(list_url, headers=HEADERS, timeout=10)
@@ -19,23 +36,48 @@ def fetch_cctd_price():
         for link in soup.find_all('a', href=True):
             href = link.get('href', '')
             if 'catid=33' in href and 'id=' in href:
-                article_url = href if href.startswith('http') else f"https://www.coalchina.org.cn{href}"
-                article_resp = requests.get(article_url, headers=HEADERS, timeout=10)
-                text = BeautifulSoup(article_resp.text, 'html.parser').get_text()
-                match = re.search(r'5000K[、，]\s*(\d+)', text)
-                if match:
-                    return int(match.group(1))
+                full_url = href if href.startswith('http') else f"https://www.coalchina.org.cn{href}"
+                return full_url
         return None
     except Exception as e:
-        print(f"⚠️ CCTD采集失败: {e}")
+        print(f"⚠️ 获取CCTD列表失败: {e}")
+        return None
+
+
+# ============================================================
+# 价格采集：优先使用“北方港实际报价”，回退到CCI/CCTD
+# ============================================================
+
+def fetch_port_price_from_cctd():
+    """从CCTD最新日评中提取北方港口5000K参考报价区间中间值"""
+    article_url = get_latest_cctd_article_url()
+    if not article_url:
+        return None
+    try:
+        resp = requests.get(article_url, headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text()
+        # 匹配类似“5000K、4500K规格品分别收于959、871、790元/吨”
+        match = re.search(r'5000K[、，]\s*(\d+)', text)
+        if match:
+            return int(match.group(1))
+        # 尝试匹配报价区间：如“5000K 900-910元/吨”
+        match_range = re.search(r'5000K[：:]\s*(\d+)\s*[-~]\s*(\d+)', text)
+        if match_range:
+            return (int(match_range.group(1)) + int(match_range.group(2))) // 2
+        return None
+    except Exception as e:
+        print(f"⚠️ 从CCTD提取北方港报价失败: {e}")
         return None
 
 
 def fetch_cci_price():
-    """获取CCI5000指数"""
+    """获取CCI5000指数（动态发现最新文章）"""
+    article_url = get_latest_sxcoal_article_url("日度数据跟踪")
+    if not article_url:
+        return None
     try:
-        url = "https://www.sxcoal.com/news/detail/2080461031963045889"
-        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp = requests.get(article_url, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
         match = re.search(r'CCI5000\s+(\d+)', text)
@@ -47,9 +89,32 @@ def fetch_cci_price():
         return None
 
 
+def fetch_cctd_price():
+    """获取CCTD 5000K价格（作为备用）"""
+    article_url = get_latest_cctd_article_url()
+    if not article_url:
+        return None
+    try:
+        resp = requests.get(article_url, headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text()
+        match = re.search(r'5000K[、，]\s*(\d+)', text)
+        if match:
+            return int(match.group(1))
+        return None
+    except Exception as e:
+        print(f"⚠️ CCTD采集失败: {e}")
+        return None
+
+
+# ============================================================
+# 运费、库存、电厂、市场简评等（保持原逻辑，但均动态发现）
+# ============================================================
+
 def fetch_freight():
     """获取海运费（秦皇岛→张家港4-5万吨）"""
     try:
+        # 上海航运交易所或CEI页面，这里使用之前可用的CEI固定页，若失效可改为动态搜索
         url = "https://www.cei.cn/defaultsite/s/article/2026/09/07/4b4ff607-9d914745-01a0-7ad149c9-7185_home.html"
         resp = requests.get(url, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
@@ -115,23 +180,14 @@ def fetch_power_data():
         return {"inventory": 1418.2, "consumption": 87.9}
 
 
-# ============================================================
-# 新增：市场简评、事件驱动、长江口库存采集
-# ============================================================
-
 def fetch_cctd_article_content():
-    """获取CCTD最新日评文章的全文内容"""
-    try:
-        list_url = "https://www.coalchina.org.cn/index.php?m=content&c=index&a=lists&catid=33"
-        resp = requests.get(list_url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '')
-            if 'catid=33' in href and 'id=' in href:
-                article_url = href if href.startswith('http') else f"https://www.coalchina.org.cn{href}"
-                article_resp = requests.get(article_url, headers=HEADERS, timeout=10)
-                return article_resp.text
+    """获取CCTD最新日评全文"""
+    article_url = get_latest_cctd_article_url()
+    if not article_url:
         return None
+    try:
+        resp = requests.get(article_url, headers=HEADERS, timeout=10)
+        return resp.text
     except Exception as e:
         print(f"⚠️ CCTD文章获取失败: {e}")
         return None
@@ -144,7 +200,6 @@ def fetch_market_summary():
         return None
     soup = BeautifulSoup(html, 'html.parser')
     text = soup.get_text()
-    # 尝试匹配"煤炭市场简评"段落
     patterns = [
         r'煤炭市场简评[：:]\s*(.*?)(?=\n\n|\Z)',
         r'市场简评[：:]\s*(.*?)(?=\n\n|\Z)',
@@ -156,17 +211,7 @@ def fetch_market_summary():
             summary = match.group(1).strip()
             summary = re.sub(r'\s+', ' ', summary)
             return summary
-    # 若未找到，返回全文前300字符
     return text[:300]
-
-
-def fetch_yangtze_inventory():
-    """
-    尝试从公开数据获取长江口库存（当前版本暂无法自动采集，返回None）
-    如后续找到数据源可补充
-    """
-    # 预留接口，当前返回None
-    return None
 
 
 def extract_event_from_summary(summary):
@@ -185,50 +230,68 @@ def extract_event_from_summary(summary):
 # ============================================================
 
 def fetch_all_data():
-    """采集今日收盘数据，包含新增维度"""
+    """
+    采集今日收盘数据，优先使用北方港实际报价。
+    长江口价格 = 北方港基准 + 海运费
+    """
     print("📡 正在采集今日收盘数据...")
 
     today = datetime.now()
     tomorrow = today + timedelta(days=1)
 
-    port_price = fetch_cci_price() or fetch_cctd_price() or 872
+    # 1. 北方港基准价：优先实际报价，再CCI，再CCTD
+    port_price = fetch_port_price_from_cctd()
+    if port_price:
+        print(f"   ✅ 使用CCTD实际报价: {port_price} 元/吨")
+    else:
+        cci = fetch_cci_price()
+        if cci:
+            # 根据库存动态溢价
+            inv = fetch_inventory() or 2205
+            if inv < 2300:
+                premium = 25
+            elif inv < 2500:
+                premium = 20
+            else:
+                premium = 15
+            port_price = cci + premium
+            print(f"   ⚠️ 使用CCI+溢价: CCI={cci}, 溢价={premium}, 基准={port_price} 元/吨")
+        else:
+            port_price = fetch_cctd_price() or 872
+            print(f"   ⚠️ 回退到CCTD: {port_price} 元/吨")
+
+    # 2. 其他数据
     freight = fetch_freight() or 36.1
     freight_change = fetch_freight_change() or -3.2
     inventory = fetch_inventory() or 2205
     power = fetch_power_data()
     summary = fetch_market_summary()
-    yangtze_inv = fetch_yangtze_inventory()
-
-    # 推算长江口收盘参考价
-    yangtze = port_price + freight
-
-    # 提取事件
     event = extract_event_from_summary(summary)
 
+    # 3. 推算长江口收盘参考价 = 北方港 + 运费
+    yangtze = port_price + freight
+
     data = {
-        "cctd": port_price,
+        "cctd": port_price,          # 基准价（实际报价或修正后）
         "cci": port_price,
         "freight": freight,
         "freight_change": freight_change,
         "inventory": inventory,
         "power": power,
         "yangtze": yangtze,
-        "yangtze_inventory": yangtze_inv,
         "market_summary": summary,
         "event": event,
         "today": today.strftime("%Y-%m-%d"),
         "tomorrow": tomorrow.strftime("%Y-%m-%d")
     }
 
-    print(f"   CCI5000收盘: {data['cci']} 元/吨")
-    print(f"   海运费收盘: {data['freight']} 元/吨")
+    print(f"   北方港基准价: {data['cctd']} 元/吨")
+    print(f"   海运费: {data['freight']} 元/吨")
     print(f"   运费周变化: {data['freight_change']}%")
     print(f"   北方三港库存: {data['inventory']} 万吨")
     print(f"   电厂库存: {data['power']['inventory']} 万吨")
     print(f"   电厂日耗: {data['power']['consumption']} 万吨")
     print(f"   推算长江口收盘参考价: {data['yangtze']} 元/吨")
-    if data['yangtze_inventory']:
-        print(f"   长江口库存: {data['yangtze_inventory']} 万吨")
     if data['event']:
         print(f"   ⚡ 事件: {data['event']}")
     print(f"   预测日期: {data['tomorrow']}")
